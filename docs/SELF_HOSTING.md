@@ -33,7 +33,10 @@ docker compose up -d
 ```
 
 - The exercise stills and animations (180 px, ~80 MB) ship inside the web image; nothing is downloaded on first start. An old `media/` folder and its two volume lines from before v1.4.0 are no longer used: harmless if you keep them, safe to delete.
-- Open **http://localhost:8080** and create a profile with a passkey.
+- The default `docker-compose.yml` does **not** publish a host port (so Dokploy, Traefik, or
+  another stack on the same machine is not fighting over `:8080`). To use openGym on the Docker
+  host, add a `ports:` mapping yourself — e.g. `127.0.0.1:8080:80` under `web` in a local
+  compose override — then open **http://localhost:8080** and create a profile with a passkey.
 - Rather build from source than pull prebuilt images? Skip `docker compose pull` and run
   `docker compose up -d --build` instead — no Node needed locally either way.
 
@@ -41,6 +44,7 @@ Check it's healthy:
 
 ```bash
 docker compose ps
+# only if you published a host port (see above):
 curl http://localhost:8080/api/health      # {"ok":true,...}
 ```
 
@@ -53,9 +57,10 @@ openGym signs you in with **passkeys** (WebAuthn). Browsers enforce two rules:
 1. Passkeys are bound to an exact **hostname** (`RP_ID`).
 2. They only work over **HTTPS** — with one exception: `http://localhost`.
 
-So `http://localhost:8080` works on the machine running Docker, but **another device (your
-phone) cannot use `http://<your-LAN-ip>:8080`** — that's neither localhost nor HTTPS, so the
-passkey prompt won't appear. To use openGym from your phone you need a real HTTPS hostname.
+So once you have published something like `127.0.0.1:8080:80`, `http://localhost:8080` works on the
+machine running Docker, but **another device (your phone) cannot use `http://<your-LAN-ip>:8080`**
+— that's neither localhost nor HTTPS, so the passkey prompt won't appear. To use openGym from your
+phone you need a real HTTPS hostname.
 
 (You can still open it over LAN in **guest mode**, which stores data only in that browser — or
 turn on **password sign-in**, see [§4](#password-sign-in-optional).)
@@ -87,12 +92,20 @@ you're poking at the API directly:
 Put openGym behind something that terminates TLS for a hostname you control, then point it at
 the `web` container. Pick whichever you already run:
 
-### Option A — Cloudflare Tunnel (no open ports)
+### Option A — Cloudflare Tunnel (no open ports on the internet)
 
-1. Create a tunnel and route `gym.example.com` → `http://<docker-host>:8080`.
+The tunnel agent runs on the Docker host and must reach openGym on a **published** host port — the
+default compose file does not bind one. Add under `web`, e.g.
+`ports: - "127.0.0.1:${WEB_PORT:-8080}:${NGINX_PORT:-80}"`, then:
+
+1. Create a tunnel and route `gym.example.com` → `http://<docker-host>:8080` (or whatever host
+   port you chose).
 2. Cloudflare gives you HTTPS automatically.
 
-### Option B — Caddy (automatic Let's Encrypt)
+### Option B — Caddy on the Docker host (automatic Let's Encrypt)
+
+Caddy on the host is not on the compose network, so publish a host port on `web` as in option A,
+then:
 
 ```caddy
 gym.example.com {
@@ -100,9 +113,10 @@ gym.example.com {
 }
 ```
 
-### Option C — Traefik / nginx / Nginx Proxy Manager
+### Option C — Traefik / nginx / Nginx Proxy Manager (same Docker network)
 
-Route `gym.example.com` (HTTPS) → `web:80` (or `<docker-host>:8080`). Any reverse proxy works —
+Route `gym.example.com` (HTTPS) → `web:80` (container port / `NGINX_PORT`; **no** host `ports:`
+mapping). Dokploy does this when you attach a domain. Any reverse proxy works —
 openGym only needs the browser to reach it over `https://gym.example.com`. If that proxy caps
 request bodies (nginx does, at 1 MiB by default), allow at least 5 MiB on `/api/` — the app syncs
 its whole history in one PUT; the bundled web image already allows 5 MiB, matching the API. The
@@ -115,7 +129,6 @@ Then set your domain in `.env` and restart:
 # .env
 RP_ID=gym.example.com
 ORIGIN=https://gym.example.com
-WEB_PORT=8080
 RP_NAME=openGym
 ```
 
@@ -440,7 +453,6 @@ on port 80 inside its container. If you are merging this into a compose file tha
 settings in `.env` move those without editing any config file:
 
 ```bash
-WEB_PORT=8080              # host port — what you browse to
 NGINX_PORT=80              # port the web container listens on, inside the container
 BACKEND=api                # name of the API service that /api is proxied to
 PORT=3000                  # port the API listens on; web proxies to the same value
@@ -797,7 +809,7 @@ browser (see section 2).
 | No passkey prompt on my phone | You're on `http://` or an IP, not HTTPS. Set up a domain (section 3). |
 | "verification failed" on login | `RP_ID`/`ORIGIN` don't match the URL in the address bar. See the section above — start with what the server logged on startup. |
 | Exercise pictures missing | You are on an image older than v1.4.0 or a custom build: `docker compose pull && docker compose up -d`. A source build needs `catalogue/media/` checked out. |
-| Port 8080 already used | Set `WEB_PORT=9090` in `.env` (and update `ORIGIN` for local testing). |
+| Host port already used (after you added `web.ports`) | Pick another host side, e.g. `127.0.0.1:9090:80`, and match `ORIGIN` for local testing. |
 | A photo or video will not upload ("refused as too large", or it stops partway) | A proxy in front caps the body or cuts the request off: see [Photos and videos](#photos-and-videos-of-custom-exercises) for the body size and timeouts it needs. |
 | No "Reminders" page in Settings | Requires a signed-in profile and HTTPS (or `localhost`) — guest mode and plain HTTP over LAN can't subscribe. |
 | Day reminder fires at the wrong time | Toggle it off and on in Settings → Reminders so it re-detects your browser's timezone (also happens automatically on every app load — see section 7). |

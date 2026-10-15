@@ -135,8 +135,10 @@ docker compose pull      # prebuilt images, amd64 + arm64 (skip this to build fr
 docker compose up -d
 ```
 
-Open <http://localhost:8080>, tap **Create profile**, and you're in. The exercise animations are
-part of the image, so there's nothing else to download.
+The bundled compose file does not bind a host port (Traefik/Dokploy on the same network use service
+`web`, container port 80). To try it on the Docker host, publish e.g. `127.0.0.1:8080:80` under
+`web` in a local override, then open <http://localhost:8080>, tap **Create profile**, and you're
+in. The exercise animations are part of the image, so there's nothing else to download.
 
 To reach it from your phone with passkeys you need HTTPS on a domain; that's a two-line change in
 `.env`. The [self-hosting guide](docs/SELF_HOSTING.md) walks through Cloudflare Tunnel, Caddy,
@@ -155,8 +157,7 @@ Traefik and nginx, and there are separate guides for
 | Variable | What it does | Default |
 |---|---|---|
 | `RP_ID` | Hostname passkeys are bound to | `localhost` |
-| `ORIGIN` | Full URL the app is served from | `http://localhost:8080` |
-| `WEB_PORT` | Host port for the web UI | `8080` |
+| `ORIGIN` | Full URL the app is served from | `http://localhost:8080` (when you publish `127.0.0.1:8080:80` locally) |
 | `NGINX_PORT` | Port the web container listens on inside the container | `80` |
 | `BACKEND` | Name of the API service that `/api` is proxied to | `api` |
 | `PORT` | Port the API listens on; the web container proxies to the same value | `3000` |

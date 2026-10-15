@@ -43,8 +43,13 @@ services:
     depends_on:
       api:
         condition: service_started
-    ports:
-      - "${WEB_PORT:-8080}:${NGINX_PORT:-80}"
+    # No host port bind — a reverse proxy on the same Docker network (Dokploy/Traefik,
+    # Caddy, nginx, …) reaches nginx inside this container on NGINX_PORT (default 80).
+    # Publishing WEB_PORT on a shared machine collides with other stacks. To browse from
+    # the Docker host during local testing, publish explicitly yourself, e.g.
+    # 127.0.0.1:8080:80 under ports: in a local override — not in this file.
+    expose:
+      - "${NGINX_PORT:-80}"
     # nginx renders its config at start-up from these (web/nginx.conf.template),
     # so the API service does not have to be called `api`. Defaults are the old
     # hardcoded values, so an existing .env and an existing stack are unaffected.

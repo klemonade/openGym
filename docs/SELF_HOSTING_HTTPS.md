@@ -56,10 +56,14 @@ It would not be very nice to have to remember all the ports when we address our 
 Port 443 (https) can only be used once so we would let our proxy answer to that port.
 We configure the proxy to forward requests to our individual services like so:
 ```
-proxy :443 ──┬── openGym   :8080   (the web container; it forwards /api itself)
+proxy :443 ──┬── openGym   :8080   (host port you publish from compose → nginx :80 inside; forwards /api itself)
              └── Nextcloud :8081
 ```
 Now we have a nice URL and can forget about the ports. The proxy reads the URL request and forwards it to the target service/host.
+
+The bundled `docker-compose.yml` does not publish that host port by default — add e.g.
+`ports: - "127.0.0.1:8080:80"` under `web` (or `0.0.0.0:8080:80` if Caddy on another machine
+on your LAN must reach it) before pointing Caddy at `:8080`.
 
 ## Putting it together
 
